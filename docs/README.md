@@ -24,6 +24,12 @@ The bot currently trades Exhaustion/Absorption setups by looking for high-volume
 
 ## Getting Started
 
+### Clone the Repository
+```bash
+git clone https://github.com/welloul/CVDTrader.git
+cd CVDTrader
+```
+
 ### Backend Setup
 ```bash
 cd backend

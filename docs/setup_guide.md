@@ -7,8 +7,16 @@ This guide provides detailed instructions on how to install, configure, and run 
 - **Python 3.10+**: Ensure you have Python installed. Use `python --version` to check.
 - **Node.js 18+**: Required for the frontend dashboard.
 - **Hyperliquid Account**: You need a valid wallet address and private key (or API agent key).
+- **Git**: Required to clone the repository.
 
-## 2. Backend Installation
+## 2. Clone the Repository
+
+```bash
+git clone https://github.com/welloul/CVDTrader.git
+cd CVDTrader
+```
+
+## 3. Backend Installation
 
 1. **Clone the repository** (if applicable) or navigate to the `backend` folder.
 2. **Create a virtual environment**:
@@ -21,7 +29,7 @@ This guide provides detailed instructions on how to install, configure, and run 
    pip install -r requirements.txt
    ```
 
-## 3. Configuration (`.env`)
+## 4. Configuration (`.env`)
 
 Create a `.env` file in the `backend/` directory by copying `.env.example`.
 
@@ -36,7 +44,7 @@ Create a `.env` file in the `backend/` directory by copying `.env.example`.
 - `TARGET_COIN`: The asset to trade (e.g., `ETH`, `BTC`).
 - `ACTIVE_STRATEGY`: Set to `delta_poc`.
 
-## 4. Running the Application
+## 5. Running the Application
 
 ### Start the Backend
 ```bash
@@ -50,7 +58,7 @@ The backend will start syncing state and connecting to the WebSocket feed.
 3. Start the dev server: `npm run dev`
 4. Open your browser to `http://localhost:5173`.
 
-## 5. Security Recommendations
+## 6. Security Recommendations
 
 - **Use API Agents**: We highly recommend using Hyperliquid's "API Agent" feature instead of your primary wallet private key. This allows you to restrict permissions and set a specific "expiry" or "gas" limit.
 - **Dryrun First**: Always run the bot in `dryrun` mode for at least 24 hours to ensure your environment and indicators are stable before moving to Testnet or Live.
