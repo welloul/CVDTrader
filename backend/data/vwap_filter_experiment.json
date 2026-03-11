@@ -1,0 +1,27 @@
+{
+    "experiment": "VWAP Filter A/B Test",
+    "description": "Performance comparison between VWAP filter enabled vs disabled",
+    "filter_disabled_at": "2026-03-10T15:00:00Z",
+    "status": "in_progress",
+    "configuration": {
+        "vwap_filter_enabled": false,
+        "vwap_tolerance": 0.005,
+        "tolerance_percentage": "±0.5%"
+    },
+    "notes": [
+        "VWAP filter was filtering trades based on price position relative to VWAP",
+        "Filter logic: price > VWAP + 0.5% → SHORT only; price < VWAP - 0.5% → LONG only",
+        "Starting 2026-03-10T15:00 UTC: Filter disabled to allow ALL trades for comparison",
+        "Both LONG and SHORT signals are now allowed regardless of VWAP position"
+    ],
+    "baseline_performance": {
+        "period": "2026-03-10T04:49:00Z to 2026-03-10T14:59:00Z (approx 10 hours)",
+        "filter_status": "enabled",
+        "note": "VWAP filter was active during this period"
+    },
+    "test_performance": {
+        "period": "2026-03-10T15:00:00Z onwards",
+        "filter_status": "disabled",
+        "note": "All trades allowed - tracking performance for comparison"
+    }
+}
