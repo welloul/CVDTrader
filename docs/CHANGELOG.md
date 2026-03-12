@@ -5,9 +5,17 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased] - 2026-03-09 (v1.2)
+## [Unreleased] - 2026-03-12 (v1.3)
 
 ### Added
+- **Partial TP with Trailing SL at POC**: Implemented a new take-profit strategy that secures partial profits while allowing the remaining position to ride the trend:
+    - When TP is hit: Close 50% of position at TP price, set trailing SL at original TP level for remaining 50%
+    - After partial TP: Trailing SL updates to each candle's POC as price continues moving favorably
+    - On CVD flip: SL is set to current POC (instead of closing at market)
+    - On trailing SL hit: Close remaining 50% of position
+    - Added new fields to `Position` model: `tp_50_hit`, `trailing_sl`, `original_tp`
+    - Implemented `_close_partial_at_tp()` method to handle partial position closing
+- **Fee-Adjusted Breakeven Calculation**: Added `breakeven` field to `Position` model and `calculate_breakeven()` method in `StrategyModule`. Breakeven price is now calculated as `EntryPrice * (1 + 0.0003)` for LONGs and `EntryPrice * (1 - 0.0003)` for SHORTs (0.03% fee), ensuring trades actually cover their fee before counting as profitable.
 - **Trade History with JSON Persistence**: Added `ClosedTrade` model and `closed_trades` list to `GlobalState` in `state.py`. Trades are recorded on every close (`_close_position`) with entry/exit prices, size, PnL, side, and reason. Exposed via `GET /api/trades` endpoint and streamed via WebSocket. Implemented JSON file persistence:
     - Trades saved to `data/trades.json` immediately when a position closes (no data loss on crash).
     - Trades loaded from JSON on bot startup (survives restarts).
@@ -20,7 +28,7 @@ All notable changes to this project will be documented in this file.
 - **CVD-Based Exit Engine**: Implemented a dynamic trailing stop-loss system in `StrategyModule` triggered on each 1m candle close:
     - Rule 1 — CVD declining (same sign, magnitude dropping) → tighten SL to previous candle POC.
     - Rule 2 — CVD flips sign (hostile to position direction) → tighten SL to current candle POC.
-    - Rule 3 — Two consecutive CVD flip candles → market close immediately.
+    - Rule 3 — Two consecutive CVD flip candles → market close immediately. **(Removed in v1.3 - replaced with SL at POC)**
     - Tick-level SL/TP check on every trade event via `_check_sl_tp()`.
 - **`Position` model extended**: Added `stop_loss`, `take_profit`, and `side` fields to `state.py` `Position`.
 - **`ExecutionGateway.close_position()`**: New method that issues a `market_close` to Hyperliquid (or logs a dryrun skip).
