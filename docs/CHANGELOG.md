@@ -8,6 +8,11 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased] - 2026-03-12 (v1.3)
 
 ### Added
+- **Minimum $0.40 Realized Profit Guarantee**: Implemented a minimum profit threshold to prevent micro-profit trades. The bot now calculates the potential profit at the wick-based TP and adjusts it to guarantee at least $0.40 profit if the calculated TP would result in less.
+- **Wick-Based TP/SL Calculation**: Replaced fixed $2 offset with wick-based calculation:
+    - SL = Entry ± (wick × 2) — places SL 2x the wick size beyond entry
+    - TP = Entry ± (wick × 2 × 1.5) — maintains 1.5:1 risk-reward ratio
+    - This ensures consistent risk-reward across different priced coins
 - **Partial TP with Trailing SL at POC**: Implemented a new take-profit strategy that secures partial profits while allowing the remaining position to ride the trend:
     - When TP is hit: Close 50% of position at TP price, set trailing SL at original TP level for remaining 50%
     - After partial TP: Trailing SL updates to each candle's POC as price continues moving favorably
