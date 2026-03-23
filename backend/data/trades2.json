@@ -1,0 +1,62 @@
+[
+  {
+    "id": "1b5fdf38-68fe-4b14-a0d6-8c3c53baeeb7",
+    "coin": "HYPE",
+    "side": "SHORT",
+    "size": 1.3517166801838334,
+    "entry_price": 36.99,
+    "exit_price": 36.961,
+    "pnl": 0.0392,
+    "reason": "SL hit @ 36.9610",
+    "opened_at": "2026-03-14T03:12:40.709610Z",
+    "closed_at": "2026-03-14T03:13:32.423702Z"
+  },
+  {
+    "id": "10649917-da40-47b1-be6e-ec735cb56a38",
+    "coin": "HYPE",
+    "side": "SHORT",
+    "size": 1.352082206598161,
+    "entry_price": 36.980000000000004,
+    "exit_price": 36.965,
+    "pnl": 0.020281,
+    "reason": "SL hit @ 36.9650",
+    "opened_at": "2026-03-14T03:14:40.059500Z",
+    "closed_at": "2026-03-14T03:15:34.213682Z"
+  },
+  {
+    "id": "a6f1bae7-afc2-4735-9c8b-9900d87b1e8a",
+    "coin": "BTC",
+    "side": "SHORT",
+    "size": 0.0007045031843543933,
+    "entry_price": 70972.0,
+    "exit_price": 70972.0,
+    "pnl": 0.0,
+    "reason": "SL hit @ 70972.0000",
+    "opened_at": "2026-03-14T03:15:34.207047Z",
+    "closed_at": "2026-03-14T03:15:39.929568Z"
+  },
+  {
+    "id": "e554f649-75aa-4c4d-83ff-8f4249a751af",
+    "coin": "ARB",
+    "side": "LONG",
+    "size": 500.0,
+    "entry_price": 0.1,
+    "exit_price": 0.10064,
+    "pnl": 0.32,
+    "reason": "SL hit @ 0.1006",
+    "opened_at": "2026-03-14T06:38:03.332134Z",
+    "closed_at": "2026-03-14T06:38:03.334065Z"
+  },
+  {
+    "id": "5c8c3664-a528-4293-9f45-9443385c178b",
+    "coin": "SOL",
+    "side": "SHORT",
+    "size": 0.5752416014726185,
+    "entry_price": 86.92,
+    "exit_price": 86.89,
+    "pnl": 0.017257,
+    "reason": "SL hit @ 86.8900",
+    "opened_at": "2026-03-14T16:28:45.636290Z",
+    "closed_at": "2026-03-14T16:32:22.610028Z"
+  }
+]

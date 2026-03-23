@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 import websockets
 import time
 from typing import Callable, Coroutine, Dict, Any
@@ -8,10 +9,16 @@ from src.market_data.indicators import IndicatorCompute
 from src.market_data.candles import CandleBuilder
 from src.market_data.vwap import DailyVWAPTracker
 
+# Hyperliquid WebSocket URLs
+TESTNET_WS_URL = "wss://api.hyperliquid-testnet.xyz/ws"
+MAINNET_WS_URL = "wss://api.hyperliquid.xyz/ws"
+
 class MarketDataHandler:
     """Handles async WebSocket connection to Hyperliquid for market data."""
     
-    URL = "wss://api.hyperliquid.xyz/ws"
+    # Determine URL based on execution mode
+    _exec_mode = os.getenv("EXECUTION_MODE", "dryrun").lower()
+    URL = TESTNET_WS_URL if _exec_mode == "testnet" else MAINNET_WS_URL
     
     def __init__(self, coin: str):
         self.coin = coin
@@ -96,17 +103,45 @@ class MarketDataHandler:
                 sz = float(trade["sz"])
                 px = float(trade["px"])
                 is_buy = trade["side"] == "B"
-                ts = float(trade["time"])
+                # Hyperliquid timestamp is in milliseconds
+                # Hyperliquid timestamps are in nanoseconds (epoch ns like 1777777777777777777)
+                trade_ts_ns = float(trade["time"])
+                
+                # Convert to appropriate formats
+                if trade_ts_ns > 10**15:  # Nanoseconds
+                    trade_ts_ms = trade_ts_ns / 1e6  # Convert to milliseconds
+                    trade_ts = trade_ts_ns / 1e9  # Convert to seconds
+                elif trade_ts_ns > 10**12:  # Milliseconds
+                    trade_ts_ms = trade_ts_ns  # Already in milliseconds
+                    trade_ts = trade_ts_ns / 1000  # Convert to seconds
+                else:  # Already in seconds
+                    trade_ts_ms = trade_ts_ns * 1000  # Convert to milliseconds
+                    trade_ts = trade_ts_ns
+                
+                # Calculate network latency (time from trade occurrence to our receipt)
+                network_latency_ms = (receive_time - trade_ts) * 1000
+                
+                # Track latency stats per coin
+                if not hasattr(self, 'latency_samples'):
+                    self.latency_samples = []
+                self.latency_samples.append(network_latency_ms)
+                # Keep last 100 samples
+                if len(self.latency_samples) > 100:
+                    self.latency_samples.pop(0)
+                
+                # Also track in global state for API access
+                from src.core.state import state
+                state.update_latency(self.coin, network_latency_ms)
                 
                 # Update Indicators
-                ind_data = self.indicators.process_trade(ts, is_buy, sz, px)
+                ind_data = self.indicators.process_trade(trade_ts_ms, is_buy, sz, px)
                 
                 # Update Daily VWAP
-                current_vwap = self.vwap.process_trade(ts, px, sz)
+                current_vwap = self.vwap.process_trade(trade_ts_ms, sz, px)
                 
                 # Update Candle Builders
-                finished_1m = self.builder_1m.process_trade(ts, px, sz, is_buy)
-                finished_15m = self.builder_15m.process_trade(ts, px, sz, is_buy)
+                finished_1m = self.builder_1m.process_trade(trade_ts_ms, px, sz, is_buy)
+                finished_15m = self.builder_15m.process_trade(trade_ts_ms, px, sz, is_buy)
                 
                 # Construct combined market data event
                 event = {
@@ -115,16 +150,17 @@ class MarketDataHandler:
                     "price": px,
                     "volume": sz,
                     "is_buy": is_buy,
-                    "timestamp": ts,
+                    "timestamp": trade_ts_ms,
                     "indicators": ind_data,
                     "vwap": current_vwap,
-                    "latency_ms": (time.time() - receive_time) * 1000,  # Real processing latency
+                    "latency_ms": (time.time() - receive_time) * 1000,  # Processing latency
+                    "network_latency_ms": network_latency_ms,  # Network latency
                     "closed_candle_1m": finished_1m,
                     "closed_candle_15m": finished_15m
                 }
                 
                 # UI Log for ticker price (throttled by second)
-                current_sec = int(ts / 1000) if ts > 10**10 else int(ts)
+                current_sec = int(trade_ts)
                 if not hasattr(self, '_last_log_sec') or current_sec > self._last_log_sec:
                     from src.core.state import state
                     state.add_log("INFO", f"Ticker Update [{self.coin}]: ${px:,.2f}", price=px, coin=self.coin)

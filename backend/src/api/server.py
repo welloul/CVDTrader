@@ -29,6 +29,7 @@ async def get_status():
     return {
         "is_running": state.is_running,
         "wallet_balance": state.wallet_balance,
+        "main_wallet_balance": state.main_wallet_balance,
         "positions_count": len(state.positions),
         "active_orders_count": len(state.active_orders)
     }
@@ -60,6 +61,12 @@ async def stop_bot():
     await state.stop_bot()
     return {"status": "stopped"}
 
+@app.post("/api/reset-circuit")
+async def reset_circuit_breaker():
+    """Reset the circuit breaker to allow trading after failures."""
+    state.risk_manager.reset_circuit_breaker()
+    return {"status": "circuit_breaker_reset", "bot_running": state.risk_manager.state.is_running}
+
 @app.post("/api/config")
 async def update_config(config: ConfigUpdate):
     update_dict = config.dict(exclude_none=True)
@@ -74,6 +81,11 @@ async def get_trades():
         "total_pnl": round(sum(t.pnl for t in state.closed_trades), 6),
         "count": len(state.closed_trades)
     }
+
+@app.get("/api/latency")
+async def get_latency():
+    """Returns network latency stats per coin."""
+    return state.get_latency_stats()
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
@@ -100,7 +112,7 @@ async def state_streamer():
                         "is_running": state.is_running,
                         "wallet_balance": state.wallet_balance,
                         "positions": {k: v.dict() for k, v in state.positions.items()},
-                        "active_orders": {k: v.dict() for k, v in state.active_orders.items()},
+                        "active_orders": {k: v.model_dump() if hasattr(v, 'model_dump') else {"oid": v.oid} for k, v in state.active_orders.items()},
                         "config": state.config,
                         "market_data": state.market_data,
                         "logs": state.logs,

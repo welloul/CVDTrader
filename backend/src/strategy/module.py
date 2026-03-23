@@ -35,10 +35,11 @@ class StrategyModule:
         Also: SL or TP hit on any tick → close immediately.
     """
 
-    def __init__(self, state: GlobalState, execution: Optional[ExecutionGateway], risk: RiskManager):
+    def __init__(self, state: GlobalState, execution: Optional[ExecutionGateway], risk: RiskManager, ttl_tracker: Optional[Any] = None):
         self.state = state
         self.execution = execution
         self.risk = risk
+        self.ttl_tracker = ttl_tracker
 
         # Per-coin reference to the CandleBuilder closed_candles list
         # Populated from the MarketDataHandler event
@@ -158,12 +159,14 @@ class StrategyModule:
     async def _evaluate_signal(self, coin: str, candle: Candle, vwap: float):
         ch = self._candle_history.get(coin, [])
         if len(ch) < 3:
+            log.info(f"[DEBUG] {coin}: Need more candles ({len(ch)}/3)")
             return  # Need at least prev + current + some history
 
         prev = ch[-2]
         curr = ch[-1]
 
         if not curr.poc:
+            log.info(f"[DEBUG] {coin}: No POC yet")
             return
 
         # --- Swing detection over lookback ---
@@ -173,6 +176,8 @@ class StrategyModule:
 
         is_new_high = curr.high >= highest_high
         is_new_low = curr.low <= lowest_low
+
+        log.info(f"[DEBUG] {coin}: highs={curr.high}/{highest_high} new_high={is_new_high}, lows={curr.low}/{lowest_low} new_low={is_new_low}")
 
         if not is_new_high and not is_new_low:
             return  # No swing extreme — no setup
@@ -270,7 +275,8 @@ class StrategyModule:
                 f"📉 SHORT Signal [{coin}] @ ${entry_price:,.2f} ({setup_type}) SL=${stop_loss:,.2f} TP=${take_profit:,.2f}"
             )
             await self._try_enter_position(coin, is_buy=False, price=entry_price,
-                                           stop_loss=stop_loss, take_profit=take_profit)
+                                           stop_loss=stop_loss, take_profit=take_profit,
+                                           entry_reason=setup_type)
 
         elif is_bull_reversal and allow_long and is_new_low:
             # Wick-based SL: SL = Entry - (wick * 2), TP = Entry + (wick * 2 * 1.5)
@@ -294,25 +300,42 @@ class StrategyModule:
                 f"📈 LONG Signal [{coin}] @ ${entry_price:,.2f} ({setup_type}) SL=${stop_loss:,.2f} TP=${take_profit:,.2f}"
             )
             await self._try_enter_position(coin, is_buy=True, price=entry_price,
-                                           stop_loss=stop_loss, take_profit=take_profit)
+                                           stop_loss=stop_loss, take_profit=take_profit,
+                                           entry_reason=setup_type)
 
     # ------------------------------------------------------------------
     # Position entry
     # ------------------------------------------------------------------
     async def _try_enter_position(self, coin: str, is_buy: bool, price: float,
-                                   stop_loss: float = 0, take_profit: float = 0):
+                                   stop_loss: float = 0, take_profit: float = 0,
+                                   entry_reason: str = ""):
         """Attempts to enter a position if one doesn't exist."""
 
+        # Check if there's already a position for this coin
         if coin in self.state.positions:
-            return
+            current_pos = self.state.positions[coin]
+            # Calculate current position value
+            current_value = abs(current_pos.size) * current_pos.entry_price
+            max_usd = self.state.config.get("max_position_size_usd", 1000)
+            
+            if current_value >= max_usd * 0.9:  # 90% of max = already at limit
+                log.info(f"Position size limit reached for {coin}, skipping", 
+                        current_value=round(current_value, 2), max=max_usd)
+                return
+        
+        # Check if there's an active order for this coin
         for order in self.state.active_orders.values():
             if order.coin == coin:
+                log.info(f"Active order exists for {coin}, skipping")
                 return
 
         max_usd = self.state.config.get("max_position_size_usd", 1000)
         target_sz = max_usd / price
 
         # Offset limit price for maker fill
+        # For LONG: buy slightly below market (0.999) so it sits on bid
+        # For SHORT: sell slightly above market (1.001) so it sits on ask
+        # This ensures post-only orders are maker orders
         limit_px = price * 0.999 if is_buy else price * 1.001
 
         # Calculate fee-adjusted breakeven price
@@ -328,22 +351,54 @@ class StrategyModule:
 
         if mode == "dryrun":
             # Simulate a filled position directly in state
-            self._simulate_fill(coin, is_buy, target_sz, price, stop_loss, take_profit, breakeven_px)
+            self._simulate_fill(coin, is_buy, target_sz, price, stop_loss, take_profit, breakeven_px, entry_reason)
             return
 
         if self.execution:
-            await self.execution.execute_limit_order(
+            result = await self.execution.execute_limit_order(
                 coin=coin,
                 is_buy=is_buy,
                 sz=target_sz,
-                limit_px=limit_px
+                limit_px=limit_px,
+                stop_loss=stop_loss,
+                take_profit=take_profit
             )
+            
+            # In live mode, track the position immediately after order is placed
+            # The position will be managed by exit logic based on SL/TP
+            if result and result.get("status") == "ok":
+                signed_sz = target_sz if is_buy else -target_sz
+                side_str = "LONG" if is_buy else "SHORT"
+                self.state.positions[coin] = Position(
+                    coin=coin,
+                    size=signed_sz,
+                    entry_price=price,
+                    leverage=self.state.config.get("max_leverage", 5),
+                    unrealized_pnl=0.0,
+                    stop_loss=stop_loss,
+                    take_profit=take_profit,
+                    breakeven=breakeven_px,
+                    side=side_str,
+                    opened_at=datetime.datetime.utcnow().isoformat() + "Z",
+                    entry_reason=entry_reason,
+                    tp_50_hit=False,
+                    trailing_sl=0.0,
+                    original_tp=take_profit
+                )
+                self.state.add_log(
+                    "INFO",
+                    f"✅ ORDER PLACED {side_str} {coin} "
+                    f"sz={abs(signed_sz):.6f} @ ${price:,.2f} | SL=${stop_loss:,.2f} TP=${take_profit:,.2f}"
+                )
+                log.info("Position tracked in state for exit management", 
+                        coin=coin, side=side_str, sl=stop_loss, tp=take_profit)
 
     # ------------------------------------------------------------------
     # Dryrun simulation
     # ------------------------------------------------------------------
     def _simulate_fill(self, coin: str, is_buy: bool, sz: float, fill_px: float,
-                        stop_loss: float = 0, take_profit: float = 0, breakeven: float = 0.0):
+                        stop_loss: float = 0, take_profit: float = 0, breakeven: float = 0.0,
+                        entry_reason: str = ""):
         """Creates a simulated position in GlobalState for dryrun mode."""
         signed_sz = sz if is_buy else -sz
         side_str = "LONG" if is_buy else "SHORT"
@@ -364,7 +419,9 @@ class StrategyModule:
             opened_at=datetime.datetime.utcnow().isoformat() + "Z",
             tp_50_hit=False,
             trailing_sl=0.0,
-            original_tp=take_profit
+            original_tp=take_profit,
+            entry_reason=entry_reason,
+            sl_modifications=[]
         )
         self.state.add_log(
             "INFO",
@@ -621,7 +678,9 @@ class StrategyModule:
             pnl=round(pnl, 6),
             reason=reason,
             opened_at=pos.opened_at or closed_at,
-            closed_at=closed_at
+            closed_at=closed_at,
+            entry_reason=pos.entry_reason,
+            sl_modifications=pos.sl_modifications
         )
         self.state.closed_trades.append(trade)
         self.state._save_trades()

@@ -41,7 +41,7 @@ Create a `.env` file in the `backend/` directory by copying `.env.example`.
     - `dryrun`: Scans for setups but does not place trades. (Safest for testing)
     - `testnet`: Trades on the Hyperliquid Testnet.
     - `live`: Trades on Hyperliquid Mainnet.
-- `TARGET_COINS`: Comma-separated list of assets to trade (e.g., `BTC,ETH,SOL,ZEC,XMR,LTC`).
+- `TARGET_COINS`: Comma-separated list of assets to trade (e.g., `BTC,ETH,SOL,ZEC,XMR,LTC,HYPE,SUI,ARB`).
 - `ACTIVE_STRATEGY`: Set to `delta_poc`.
 
 ## 5. Running the Application

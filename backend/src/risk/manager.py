@@ -35,7 +35,7 @@ class RiskManager:
         notional_value = new_total_sz * limit_px
         
         max_position_size = self.state.config.get("max_position_size_usd", 1000)
-        if notional_value > max_position_size:
+        if notional_value > max_position_size * 1.01:  # 1% tolerance for rounding
             log.warn(f"Pre-trade check failed: Notional {notional_value} exceeds max {max_position_size}", coin=coin)
             return False
 
@@ -77,5 +77,12 @@ class RiskManager:
         self.circuit_breaker_active = True
         self.state.is_running = False
         log.critical("CIRCUIT BREAKER ACTIVATED: Bot has been stopped.")
+
+    def reset_circuit_breaker(self):
+        """Manually reset the circuit breaker to allow trading."""
+        self.circuit_breaker_active = False
+        self.consecutive_failures = 0
+        self.state.is_running = True
+        log.info("Circuit breaker manually reset - bot is now running")
 
 risk_manager = RiskManager(state)
